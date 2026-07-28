@@ -18,14 +18,34 @@ struct HistoryView: View {
     /// ⌘-clicked items, for pasting several at once.
     @State private var multiSelectedIDs: Set<UUID> = []
 
+    // Date filtering: either set from the calendar popover, or inferred from
+    // phrases in the query ("7 days ago", "last week") by DateQueryParser.
+    @State private var showDateFilter = false
+    @State private var manualFrom: Date?
+    @State private var manualTo: Date?
+    @State private var pickerFrom = Date()
+    @State private var pickerTo = Date()
+
     /// `@FocusState` lets us put the cursor in the search field programmatically.
     @FocusState private var searchFocused: Bool
+
+    private var parsedQuery: DateQueryParser.Result { DateQueryParser.parse(query) }
+
+    /// The calendar popover wins over typed phrases when both are present.
+    private var activeFrom: Date? { manualFrom ?? parsedQuery.from }
+    private var activeTo: Date? { manualTo ?? parsedQuery.to }
+    private var dateFilterActive: Bool { activeFrom != nil || activeTo != nil }
 
     /// Pinned items first, then newest first. Recomputed on every redraw, which
     /// is fine at these list sizes.
     private var results: [ClipItem] {
-        store.items
-            .filter { query.isEmpty || $0.searchText.localizedCaseInsensitiveContains(query) }
+        let text = parsedQuery.text
+        return store.items
+            .filter { item in
+                (text.isEmpty || item.searchText.localizedCaseInsensitiveContains(text))
+                && activeFrom.map { item.createdAt >= $0 } ?? true
+                && activeTo.map { item.createdAt < $0 } ?? true
+            }
             .sorted { a, b in
                 if a.pinned != b.pinned { return a.pinned }
                 return a.createdAt > b.createdAt
@@ -35,6 +55,7 @@ struct HistoryView: View {
     var body: some View {
         VStack(spacing: 0) {
             searchField
+            if dateFilterActive { dateFilterChip }
             Divider()
             if results.isEmpty {
                 emptyState
@@ -78,6 +99,16 @@ struct HistoryView: View {
             }
 
             Button {
+                showDateFilter.toggle()
+            } label: {
+                Image(systemName: dateFilterActive ? "calendar.badge.checkmark" : "calendar")
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(dateFilterActive ? Color.accentColor : Color.secondary)
+            .help("Filter by date — or just type \"7 days ago\" or \"last week\"")
+            .popover(isPresented: $showDateFilter, arrowEdge: .bottom) { dateFilterPopover }
+
+            Button {
                 onOpenSettings()
             } label: {
                 Image(systemName: "gearshape")
@@ -97,6 +128,87 @@ struct HistoryView: View {
                 selectedID = results.first?.id
             }
         }
+    }
+
+    /// Shows which date range is active, with a ✕ to clear it. Ranges typed
+    /// into the query clear themselves when the text is edited.
+    private var dateFilterChip: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "calendar")
+            Text(dateRangeLabel)
+            Button {
+                manualFrom = nil
+                manualTo = nil
+                query = parsedQuery.text   // drop the date phrase, keep the rest
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+            }
+            .buttonStyle(.plain)
+            Spacer()
+            Text(results.count == 1 ? "1 match" : "\(results.count) matches")
+        }
+        .font(.system(size: 11))
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 14)
+        .padding(.bottom, 6)
+    }
+
+    private var dateRangeLabel: String {
+        let fmt: (Date) -> String = { $0.formatted(date: .abbreviated, time: .omitted) }
+        switch (activeFrom, activeTo) {
+        case let (from?, to?):
+            // `to` is exclusive; show the last *included* day.
+            let lastDay = Calendar.current.date(byAdding: .second, value: -1, to: to)!
+            let sameDay = Calendar.current.isDate(from, inSameDayAs: lastDay)
+            return sameDay ? fmt(from) : "\(fmt(from)) – \(fmt(lastDay))"
+        case let (from?, nil): return "since \(fmt(from))"
+        case let (nil, to?):   return "until \(fmt(to))"
+        default:               return ""
+        }
+    }
+
+    private var dateFilterPopover: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Show items from…").font(.headline)
+
+            HStack {
+                ForEach(["Today", "Yesterday", "Last 7 days", "Last 30 days"], id: \.self) { preset in
+                    Button(preset) {
+                        let parsed = DateQueryParser.parse(preset.lowercased())
+                        manualFrom = parsed.from
+                        manualTo = parsed.to
+                        showDateFilter = false
+                    }
+                }
+            }
+
+            Divider()
+
+            DatePicker("From", selection: $pickerFrom, displayedComponents: .date)
+            DatePicker("To", selection: $pickerTo, displayedComponents: .date)
+
+            HStack {
+                Button("Apply range") {
+                    let calendar = Calendar.current
+                    manualFrom = calendar.startOfDay(for: pickerFrom)
+                    manualTo = calendar.date(byAdding: .day, value: 1,
+                                             to: calendar.startOfDay(for: pickerTo))
+                    showDateFilter = false
+                }
+                .keyboardShortcut(.defaultAction)
+                Button("Clear") {
+                    manualFrom = nil
+                    manualTo = nil
+                    showDateFilter = false
+                }
+            }
+
+            Text("Tip: typing “7 days ago” or “last week” in the search box works too.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(14)
+        .frame(width: 300)
     }
 
     private var list: some View {
@@ -123,15 +235,6 @@ struct HistoryView: View {
                                     selectedID = item.id
                                     onPick(item)
                                 }
-                            }
-                            // Rows can be dragged straight into other apps:
-                            // text drops as text, images drop as a PNG file.
-                            .onDrag {
-                                if item.kind == .image, let url = store.imageURL(for: item),
-                                   let provider = NSItemProvider(contentsOf: url) {
-                                    return provider
-                                }
-                                return NSItemProvider(object: (item.text ?? "") as NSString)
                             }
                             .contextMenu {
                                 Button(item.pinned ? "Unpin" : "Pin") {
@@ -257,6 +360,22 @@ private struct ClipRow: View {
             }
 
             Spacer(minLength: 0)
+
+            // A dedicated drag handle: a plain .onDrag on the whole row loses
+            // to the tap gesture (the click pastes before a drag can start),
+            // so dragging gets its own grip with no tap attached.
+            if hovering {
+                Image(systemName: "line.3.horizontal")
+                    .foregroundStyle(.tertiary)
+                    .onDrag {
+                        if item.kind == .image, let url = store.imageURL(for: item),
+                           let provider = NSItemProvider(contentsOf: url) {
+                            return provider
+                        }
+                        return NSItemProvider(object: (item.text ?? "") as NSString)
+                    }
+                    .help("Drag into another app")
+            }
 
             if item.pinned || hovering {
                 Button { store.togglePin(item) } label: {
