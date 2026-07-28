@@ -7,12 +7,16 @@ struct HistoryView: View {
     @ObservedObject var store: ClipboardStore
 
     var onPick: (ClipItem) -> Void
+    var onPickMany: ([ClipItem]) -> Void
     var onClose: () -> Void
     var onOpenSettings: () -> Void
 
     /// `@State` is view-local memory that survives redraws.
     @State private var query = ""
     @State private var selectedID: UUID?
+
+    /// ⌘-clicked items, for pasting several at once.
+    @State private var multiSelectedIDs: Set<UUID> = []
 
     /// `@FocusState` lets us put the cursor in the search field programmatically.
     @FocusState private var searchFocused: Bool
@@ -102,16 +106,45 @@ struct HistoryView: View {
                     ForEach(results) { item in
                         ClipRow(item: item,
                                 store: store,
-                                isSelected: item.id == selectedID)
+                                isSelected: item.id == selectedID,
+                                isMultiSelected: multiSelectedIDs.contains(item.id))
                             .id(item.id)
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                selectedID = item.id
-                                onPick(item)
+                                // ⌘-click builds a multi-selection instead of pasting.
+                                if NSEvent.modifierFlags.contains(.command) {
+                                    if multiSelectedIDs.contains(item.id) {
+                                        multiSelectedIDs.remove(item.id)
+                                    } else {
+                                        multiSelectedIDs.insert(item.id)
+                                    }
+                                    selectedID = item.id
+                                } else {
+                                    selectedID = item.id
+                                    onPick(item)
+                                }
+                            }
+                            // Rows can be dragged straight into other apps:
+                            // text drops as text, images drop as a PNG file.
+                            .onDrag {
+                                if item.kind == .image, let url = store.imageURL(for: item),
+                                   let provider = NSItemProvider(contentsOf: url) {
+                                    return provider
+                                }
+                                return NSItemProvider(object: (item.text ?? "") as NSString)
                             }
                             .contextMenu {
                                 Button(item.pinned ? "Unpin" : "Pin") {
                                     store.togglePin(item)
+                                }
+                                if item.kind == .text {
+                                    ShareLink(item: item.text ?? "") {
+                                        Label("Share…", systemImage: "square.and.arrow.up")
+                                    }
+                                } else if let url = store.imageURL(for: item) {
+                                    ShareLink(item: url) {
+                                        Label("Share…", systemImage: "square.and.arrow.up")
+                                    }
                                 }
                                 Button("Delete", role: .destructive) {
                                     store.delete(item)
@@ -144,9 +177,15 @@ struct HistoryView: View {
         HStack(spacing: 12) {
             Label("↑↓ select", systemImage: "arrow.up.arrow.down")
             Label("⏎ paste", systemImage: "return")
+            Label("⌘click multi", systemImage: "command")
             Label("esc close", systemImage: "escape")
             Spacer()
-            Text("\(store.items.count) saved")
+            if multiSelectedIDs.count > 1 {
+                Text("⏎ pastes \(multiSelectedIDs.count) items")
+                    .foregroundStyle(Color.accentColor)
+            } else {
+                Text("\(store.items.count) saved")
+            }
         }
         .labelStyle(.titleOnly)
         .font(.system(size: 11))
@@ -165,6 +204,12 @@ struct HistoryView: View {
     }
 
     private func pasteSelected() {
+        // With a ⌘-click multi-selection, Return pastes all of them together
+        // (in list order). Otherwise, the highlighted row as usual.
+        if multiSelectedIDs.count > 1 {
+            onPickMany(results.filter { multiSelectedIDs.contains($0.id) })
+            return
+        }
         guard let selectedID,
               let item = results.first(where: { $0.id == selectedID }) else { return }
         onPick(item)
@@ -177,13 +222,21 @@ private struct ClipRow: View {
     let item: ClipItem
     @ObservedObject var store: ClipboardStore
     let isSelected: Bool
+    let isMultiSelected: Bool
 
     @State private var hovering = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            icon
-                .frame(width: 26, height: 26)
+            if isMultiSelected {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 26, height: 26)
+            } else {
+                icon
+                    .frame(width: 26, height: 26)
+            }
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.previewText)

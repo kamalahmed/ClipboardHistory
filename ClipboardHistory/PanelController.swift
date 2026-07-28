@@ -42,6 +42,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         panel.contentView = NSHostingView(rootView: HistoryView(
             store: store,
             onPick: { [weak self] item in self?.paste(item) },
+            onPickMany: { [weak self] items in self?.pasteMany(items) },
             onClose: { [weak self] in self?.hide() },
             onOpenSettings: { [weak self] in self?.onOpenSettings?() }
         ))
@@ -107,6 +108,21 @@ final class PanelController: NSObject, NSWindowDelegate {
 
     private func paste(_ item: ClipItem) {
         Paster.copyToPasteboard(item, store: store)
+        finishPaste()
+    }
+
+    /// Several ⌘-clicked items at once: their texts go onto the clipboard as
+    /// one block, one item per line, in the order shown in the list.
+    private func pasteMany(_ items: [ClipItem]) {
+        let texts = items.compactMap { $0.kind == .text ? $0.text : nil }
+        guard !texts.isEmpty else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(texts.joined(separator: "\n"), forType: .string)
+        finishPaste()
+    }
+
+    private func finishPaste() {
         hide()
 
         let autoPaste = UserDefaults.standard.object(forKey: "autoPaste") as? Bool ?? true
