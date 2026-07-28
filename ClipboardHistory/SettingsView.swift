@@ -13,6 +13,7 @@ struct SettingsView: View {
 
     @AppStorage("syncEnabled") private var syncEnabled = false
     @AppStorage("syncFolderPath") private var syncFolderPath = ""
+    @AppStorage("hotKeyPreset") private var hotKeyPreset = HotKeyPreset.cmdShiftV.rawValue
 
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var accessibilityGranted = Paster.canAutoPaste
@@ -115,8 +116,13 @@ struct SettingsView: View {
             }
 
             Section("Shortcut") {
-                LabeledContent("Show history", value: "⌘⇧V")
-                Text("Fixed for now — a shortcut recorder is a good next feature.")
+                Picker("Show history", selection: $hotKeyPreset) {
+                    ForEach(HotKeyPreset.allCases) { preset in
+                        Text(preset.label).tag(preset.rawValue)
+                    }
+                }
+                .pickerStyle(.segmented)
+                Text("Takes effect immediately, everywhere.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

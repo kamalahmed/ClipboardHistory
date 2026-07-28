@@ -1,6 +1,40 @@
 import AppKit
 import Carbon.HIToolbox
 
+/// The shortcut combinations the user can pick from in Settings. All use the
+/// letter V ("paste"), varying only the modifiers — combos chosen to be free
+/// in default macOS installs.
+enum HotKeyPreset: String, CaseIterable, Identifiable {
+    case cmdShiftV, ctrlOptV, cmdOptV, ctrlCmdV
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .cmdShiftV: return "⌘⇧V"
+        case .ctrlOptV:  return "⌃⌥V"
+        case .cmdOptV:   return "⌘⌥V"
+        case .ctrlCmdV:  return "⌃⌘V"
+        }
+    }
+
+    var keyCode: UInt32 { UInt32(kVK_ANSI_V) }
+
+    var modifiers: UInt32 {
+        switch self {
+        case .cmdShiftV: return UInt32(cmdKey | shiftKey)
+        case .ctrlOptV:  return UInt32(controlKey | optionKey)
+        case .cmdOptV:   return UInt32(cmdKey | optionKey)
+        case .ctrlCmdV:  return UInt32(controlKey | cmdKey)
+        }
+    }
+
+    static var current: HotKeyPreset {
+        HotKeyPreset(rawValue: UserDefaults.standard.string(forKey: "hotKeyPreset") ?? "")
+            ?? .cmdShiftV
+    }
+}
+
 /// A system-wide keyboard shortcut that fires even when another app is in front.
 ///
 /// This uses Carbon, which is an ancient C API — but `RegisterEventHotKey` is

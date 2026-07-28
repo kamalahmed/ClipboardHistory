@@ -29,13 +29,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         setUpStatusItem()
 
-        hotKey = GlobalHotKey(keyCode: UInt32(kVK_ANSI_V),
-                              modifiers: UInt32(cmdKey | shiftKey)) { [weak self] in
-            self?.panelController.toggle()
-        }
+        registerHotKey()
 
-        if hotKey == nil {
-            NSLog("ClipboardHistory: ⌘⇧V is already taken by another app.")
+        // Re-register when the user picks a different shortcut in Settings.
+        NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification,
+                                               object: nil, queue: .main) { [weak self] _ in
+            guard let self, self.registeredPreset != HotKeyPreset.current else { return }
+            self.registerHotKey()
         }
 
         syncManager = SyncManager(store: store)
@@ -53,6 +53,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // `open -a ClipboardHistory --args --settings` — handy for testing.
         if CommandLine.arguments.contains("--settings") {
             openSettings()
+        }
+    }
+
+    private var registeredPreset: HotKeyPreset?
+
+    private func registerHotKey() {
+        let preset = HotKeyPreset.current
+        hotKey = nil   // deinit unregisters the old combo before we take the new one
+        hotKey = GlobalHotKey(keyCode: preset.keyCode,
+                              modifiers: preset.modifiers) { [weak self] in
+            self?.panelController.toggle()
+        }
+        registeredPreset = preset
+
+        if hotKey == nil {
+            NSLog("ClipboardHistory: \(preset.label) is already taken by another app.")
         }
     }
 
