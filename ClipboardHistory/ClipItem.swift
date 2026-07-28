@@ -31,6 +31,19 @@ struct ClipItem: Identifiable, Codable, Equatable {
     var createdAt: Date
     var pinned: Bool
 
+    /// Manual position among pinned items (drag to reorder). Optional so old
+    /// history files still decode; nil sorts after explicitly ordered items.
+    var pinnedOrder: Int?
+
+    /// Text recognised inside an image clipping (on-device OCR). Searchable,
+    /// and copyable via the context menu.
+    var ocrText: String?
+
+    /// True when this looks like a password or API key — either the source
+    /// app marked the copy as concealed, or the content matches secret
+    /// patterns. Sensitive items get a key icon and can auto-delete.
+    var isSensitive: Bool?
+
     /// Which app was frontmost when this was copied — nice context in the list.
     var sourceAppName: String?
     var sourceBundleID: String?
@@ -54,15 +67,22 @@ struct ClipItem: Identifiable, Codable, Equatable {
                 .replacingOccurrences(of: "\n", with: " ⏎ ")
             return collapsed.isEmpty ? "(empty)" : collapsed
         case .image:
+            if let ocr = ocrText?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: "\n", with: " "),
+               !ocr.isEmpty {
+                return "Image · " + String(ocr.prefix(80))
+            }
             return "Image"
         }
     }
 
-    /// What the search box matches against.
+    /// What the search box matches against. Images match their recognised text
+    /// too, so a screenshot of an error message is findable by its words.
     var searchText: String {
         switch kind {
         case .text:  return text ?? ""
-        case .image: return "image \(sourceAppName ?? "")"
+        case .image: return "image \(sourceAppName ?? "") \(ocrText ?? "")"
         }
     }
 
@@ -75,6 +95,7 @@ struct ClipItem: Identifiable, Codable, Equatable {
     }
 
     var iconName: String {
+        if isSensitive == true { return "key.fill" }
         switch kind {
         case .image: return "photo"
         case .text:  return looksLikeURL ? "link" : "text.alignleft"

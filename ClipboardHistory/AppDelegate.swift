@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotKey: GlobalHotKey?
     private var syncManager: SyncManager!
     private var settingsWindow: NSWindow?
+    private var secretSweepTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // `.accessory` = live in the menu bar only: no Dock icon, no app menu.
@@ -40,6 +41,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         syncManager = SyncManager(store: store)
         syncManager.start()
+
+        // Expire password-like items on a slow tick (and once at launch, so
+        // secrets don't outlive a quit-and-relaunch).
+        store.purgeExpiredSecrets()
+        let sweep = Timer(timeInterval: 30, repeats: true) { [weak self] _ in
+            self?.store.purgeExpiredSecrets()
+        }
+        RunLoop.main.add(sweep, forMode: .common)
+        secretSweepTimer = sweep
 
         // A menu bar app launches with no window, which looks like nothing
         // happened. The first time ever, show the panel so new users see it.

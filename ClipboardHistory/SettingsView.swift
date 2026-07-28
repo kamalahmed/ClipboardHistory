@@ -15,6 +15,10 @@ struct SettingsView: View {
     @AppStorage("syncEnabled") private var syncEnabled = false
     @AppStorage("syncFolderPath") private var syncFolderPath = ""
     @AppStorage("hotKeyPreset") private var hotKeyPreset = HotKeyPreset.cmdShiftV.rawValue
+    @AppStorage("recordConcealed") private var recordConcealed = true
+    @AppStorage("secretAutoDeleteMinutes") private var secretAutoDeleteMinutes = 15
+
+    @State private var advancedSyncExpanded = false
 
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var accessibilityGranted = Paster.canAutoPaste
@@ -83,7 +87,9 @@ struct SettingsView: View {
                         .foregroundStyle(.orange)
                 }
 
-                DisclosureGroup("Advanced: use a custom folder") {
+                // Custom label so clicking the TEXT toggles it too — the stock
+                // DisclosureGroup only reacts to its little arrow.
+                DisclosureGroup(isExpanded: $advancedSyncExpanded) {
                     HStack {
                         Text(usingCustomFolder
                              ? (syncFolderPath as NSString).abbreviatingWithTildeInPath
@@ -98,7 +104,33 @@ struct SettingsView: View {
                          + "Google Drive or similar mirrors between machines.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                } label: {
+                    Text("Advanced: use a custom folder")
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            withAnimation { advancedSyncExpanded.toggle() }
+                        }
                 }
+            }
+
+            Section("Privacy") {
+                Toggle("Record copies from password managers", isOn: $recordConcealed)
+                Text("Passwords are kept like everything else — they only exist on "
+                     + "your Mac — but they're marked with a key icon and covered by "
+                     + "the auto-delete timer below. Turn this off to never record them.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Picker("Auto-delete passwords & keys", selection: $secretAutoDeleteMinutes) {
+                    Text("Never").tag(0)
+                    Text("After 5 minutes").tag(5)
+                    Text("After 15 minutes").tag(15)
+                    Text("After 1 hour").tag(60)
+                }
+                Text("Applies to password-manager copies and anything that looks like "
+                     + "a password or API key. Pinned items are never auto-deleted.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Permissions") {

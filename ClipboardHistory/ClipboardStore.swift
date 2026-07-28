@@ -1,6 +1,7 @@
 import AppKit
 import CryptoKit
 import Foundation
+import Vision
 
 /// The single source of truth for the history.
 ///
@@ -46,7 +47,8 @@ final class ClipboardStore: ObservableObject {
 
     // MARK: - Adding
 
-    func addText(_ text: String, rtf: Data? = nil, source: NSRunningApplication?) {
+    func addText(_ text: String, rtf: Data? = nil,
+                 source: NSRunningApplication?, concealedSource: Bool = false) {
         // Very long clippings get truncated so the JSON file stays sane.
         let capped = text.count > 200_000 ? String(text.prefix(200_000)) : text
 
@@ -57,10 +59,61 @@ final class ClipboardStore: ObservableObject {
                             imageFileName: nil,
                             createdAt: Date(),
                             pinned: false,
+                            isSensitive: concealedSource || Self.looksLikeSecret(capped),
                             sourceAppName: source?.localizedName,
                             sourceBundleID: source?.bundleIdentifier,
                             contentHash: Self.hash(Data(capped.utf8)))
         insert(item)
+    }
+
+    /// Heuristic for "this is probably a password or API key": known key
+    /// prefixes, or a single dense token mixing letter cases, digits and
+    /// symbols. Deliberately conservative — flagging a filename would
+    /// auto-delete something harmless.
+    static func looksLikeSecret(_ text: String) -> Bool {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty, !t.contains(" "), !t.contains("\n"), t.count <= 128 else { return false }
+
+        let keyPrefixes = ["sk-", "sk_", "pk_", "rk_", "ghp_", "gho_", "github_pat_",
+                           "AKIA", "xoxb-", "xoxp-", "AIza", "ya29.", "eyJhbGciOi"]
+        if keyPrefixes.contains(where: { t.hasPrefix($0) }) { return true }
+
+        // Not a URL, email or path — those share a password's shape. The email
+        // test wants the full name@domain.tld form; a mere "@" inside a dense
+        // token is more likely part of a password.
+        let emailPattern = #"^[\w.+-]+@[\w-]+\.[\w.-]+$"#
+        guard t.count >= 12,
+              !t.hasPrefix("http"),
+              t.range(of: emailPattern, options: .regularExpression) == nil,
+              !t.hasPrefix("/"), !t.hasPrefix("~") else { return false }
+
+        var classes = 0
+        if t.rangeOfCharacter(from: .uppercaseLetters) != nil { classes += 1 }
+        if t.rangeOfCharacter(from: .lowercaseLetters) != nil { classes += 1 }
+        if t.rangeOfCharacter(from: CharacterSet.alphanumerics.inverted) != nil { classes += 1 }
+        // Digits are required: filenames and words rarely have them, passwords do.
+        guard t.rangeOfCharacter(from: .decimalDigits) != nil else { return false }
+        return classes >= 3
+    }
+
+    /// Remove sensitive items older than the user's auto-delete window.
+    /// Called on a timer and at launch. Pinned items are never removed.
+    func purgeExpiredSecrets() {
+        let minutes = UserDefaults.standard.object(forKey: "secretAutoDeleteMinutes") as? Int ?? 15
+        guard minutes > 0 else { return }
+        let cutoff = Date().addingTimeInterval(TimeInterval(-minutes * 60))
+
+        let expired = items.filter {
+            $0.isSensitive == true && !$0.pinned && $0.createdAt < cutoff
+        }
+        guard !expired.isEmpty else { return }
+
+        let expiredIDs = Set(expired.map { $0.id })
+        for item in expired {
+            if let file = item.imageFileName { deleteImageFile(file) }
+        }
+        items.removeAll { expiredIDs.contains($0.id) }
+        save()
     }
 
     func addImage(_ image: NSImage, source: NSRunningApplication?) {
@@ -85,6 +138,32 @@ final class ClipboardStore: ObservableObject {
                             sourceBundleID: source?.bundleIdentifier,
                             contentHash: hash)
         insert(item)
+        recognizeText(in: png, itemID: item.id)
+    }
+
+    /// On-device OCR (Vision) so screenshots become searchable. Runs off the
+    /// main thread; the result is attached to the item whenever it's ready.
+    private func recognizeText(in pngData: Data, itemID: UUID) {
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            guard let cgImage = NSImage(data: pngData)?
+                .cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+
+            let request = VNRecognizeTextRequest { request, _ in
+                let lines = (request.results as? [VNRecognizedTextObservation])?
+                    .compactMap { $0.topCandidates(1).first?.string } ?? []
+                let text = lines.joined(separator: "\n")
+                guard !text.isEmpty else { return }
+                DispatchQueue.main.async {
+                    guard let self,
+                          let index = self.items.firstIndex(where: { $0.id == itemID })
+                    else { return }
+                    self.items[index].ocrText = text
+                    self.save()
+                }
+            }
+            request.recognitionLevel = .accurate
+            try? VNImageRequestHandler(cgImage: cgImage).perform([request])
+        }
     }
 
     private func insert(_ item: ClipItem) {
@@ -112,6 +191,37 @@ final class ClipboardStore: ObservableObject {
     func togglePin(_ item: ClipItem) {
         guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
         items[index].pinned.toggle()
+        // New pins go to the end of the pinned section; unpinning clears the slot.
+        items[index].pinnedOrder = items[index].pinned
+            ? (items.compactMap { $0.pinnedOrder }.max() ?? -1) + 1
+            : nil
+        save()
+    }
+
+    /// The pinned items in the order the list shows them.
+    var pinnedInOrder: [ClipItem] {
+        items.filter { $0.pinned }.sorted {
+            let a = $0.pinnedOrder ?? Int.max, b = $1.pinnedOrder ?? Int.max
+            return a != b ? a < b : $0.createdAt > $1.createdAt
+        }
+    }
+
+    /// Drag-to-reorder: move one pinned item so it sits before another.
+    func movePinned(_ draggedID: UUID, before targetID: UUID) {
+        var pinnedItems = pinnedInOrder
+        guard draggedID != targetID,
+              let from = pinnedItems.firstIndex(where: { $0.id == draggedID })
+        else { return }
+        let moved = pinnedItems.remove(at: from)
+        guard let to = pinnedItems.firstIndex(where: { $0.id == targetID }) else { return }
+        pinnedItems.insert(moved, at: to)
+
+        // Renumber 0…n; the list sorts by this.
+        for (order, pinnedItem) in pinnedItems.enumerated() {
+            if let index = items.firstIndex(where: { $0.id == pinnedItem.id }) {
+                items[index].pinnedOrder = order
+            }
+        }
         save()
     }
 
