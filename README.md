@@ -11,12 +11,12 @@ history, click what you need, and it's pasted.
 - **Search as you type** — start typing and matches appear instantly
 - **Search by date** — type "7 days ago" or "last week", or pick dates from the calendar
 - **Paste several at once** — ⌘-click a few items, press Return, they paste together
-- **Drag and drop** — hover an item and drag its ≡ handle straight into a document
+- **Reads text in your screenshots** — images are OCR'd on your Mac, so they're searchable and their text is copyable
 - **Clean text by default** — formatting is stripped when you paste; flip one setting to keep it instead
-- **Pin your favorites** — pinned items never expire
+- **Pin your favorites** — pinned items never expire, and you can drag them into your own order
 - **Share anything** — right-click an item to send it via AirDrop, Messages, and more
 - **Syncs between your Macs** — flip one switch and iCloud keeps your history on both
-- **Private by design** — everything stays on your Mac; passwords copied from password managers are never recorded
+- **Handles passwords sensibly** — password copies stay on your Mac, get a key icon, and auto-delete after 15 minutes (recording and timing are both adjustable)
 - **Your shortcut, your choice** — pick the key combo that suits you in Settings
 
 ## Install
@@ -40,7 +40,9 @@ can see where it lives.
 | Paste several items | ⌘-click each one, then Return |
 | Find last week's copy | Type "7 days ago" or "last week", or click the 📅 button |
 | Keep original formatting | ⚙ Settings → turn off *Always paste as plain text* |
-| Pin / delete / drag | Hover over the item |
+| Pin / delete | Hover over the item |
+| Reorder pinned items | Drag one over another |
+| Copy text out of a screenshot | Right-click the image → *Copy Text from Image* |
 | Sync with my other Mac | ⚙ Settings → *Sync automatically via iCloud* (both Macs) |
 | Let it paste for me | Grant Accessibility when asked — optional; without it you press ⌘V yourself |
 

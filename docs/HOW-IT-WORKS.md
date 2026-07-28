@@ -86,8 +86,10 @@ turns a throwing call into an optional.
 ## Known rough edges
 
 - A copy can take up to 0.4s to appear (the polling interval).
-- Password-manager filtering relies on apps marking their copies as concealed
-  (the `org.nspasteboard.*` convention). Most do; not all.
+- Sensitive-copy detection relies on password managers marking their copies
+  (the `org.nspasteboard.*` convention) plus a shape heuristic for keys and
+  passwords. Heuristics can miss; the auto-delete timer is best-effort, not a
+  guarantee.
 - The history JSON is not encrypted — it's readable by anything running as
   your user.
 - Sync only adds: deletions don't propagate between Macs.
@@ -105,4 +107,4 @@ turns a throwing call into an optional.
 - **A free-form shortcut recorder** instead of preset combos.
 - **Exclude apps** — never record from chosen apps.
 - **Fuzzy search** instead of substring matching.
-- **Clear-after-N-minutes** for anything that looks like a secret.
+- **Tags** for organising pinned snippets.
