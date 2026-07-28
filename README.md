@@ -9,9 +9,10 @@ history, click what you need, and it's pasted.
 
 - **Remembers everything you copy** — text, links, and images
 - **Search as you type** — start typing and matches appear instantly
+- **Search by date** — type "7 days ago" or "last week", or pick dates from the calendar
 - **Paste several at once** — ⌘-click a few items, press Return, they paste together
-- **Drag and drop** — drag any item from the list straight into a document
-- **Always pastes clean text** — formatting from Word, web pages, or code editors is stripped automatically
+- **Drag and drop** — hover an item and drag its ≡ handle straight into a document
+- **Clean text by default** — formatting is stripped when you paste; flip one setting to keep it instead
 - **Pin your favorites** — pinned items never expire
 - **Share anything** — right-click an item to send it via AirDrop, Messages, and more
 - **Syncs between your Macs** — flip one switch and iCloud keeps your history on both
@@ -37,7 +38,9 @@ can see where it lives.
 | Open my history | **⌘⇧V**, or click the menu bar icon |
 | Paste an item | Click it, or ↑↓ then Return |
 | Paste several items | ⌘-click each one, then Return |
-| Pin / delete | Hover over the item |
+| Find last week's copy | Type "7 days ago" or "last week", or click the 📅 button |
+| Keep original formatting | ⚙ Settings → turn off *Always paste as plain text* |
+| Pin / delete / drag | Hover over the item |
 | Sync with my other Mac | ⚙ Settings → *Sync automatically via iCloud* (both Macs) |
 | Let it paste for me | Grant Accessibility when asked — optional; without it you press ⌘V yourself |
 
