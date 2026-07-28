@@ -59,25 +59,38 @@ struct SettingsView: View {
             }
 
             Section("Sync between Macs") {
-                Toggle("Sync history through a shared folder", isOn: $syncEnabled)
+                Toggle("Sync automatically via iCloud", isOn: iCloudSyncBinding)
+                    .disabled(!Self.iCloudDriveExists && !iCloudSyncBinding.wrappedValue)
 
-                HStack {
-                    Text(syncFolderPath.isEmpty
-                         ? "No folder chosen"
-                         : (syncFolderPath as NSString).abbreviatingWithTildeInPath)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .foregroundStyle(syncFolderPath.isEmpty ? .secondary : .primary)
-                    Spacer()
-                    Button("Choose Folder…") { chooseSyncFolder() }
+                if Self.iCloudDriveExists {
+                    Text("One switch, no setup — history syncs through your iCloud "
+                         + "Drive. Turn this on on your other Mac too. Sync only adds: "
+                         + "deleting here does not delete there.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("iCloud Drive is not enabled on this Mac "
+                         + "(System Settings → Apple ID → iCloud).")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
                 }
 
-                Text("Pick the same folder on every Mac — one inside iCloud Drive or "
-                     + "Dropbox works well. Each Mac writes only its own file, so "
-                     + "nothing conflicts. Note: sync only adds; deleting or clearing "
-                     + "on one Mac does not delete on the others.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                DisclosureGroup("Advanced: use a custom folder") {
+                    HStack {
+                        Text(usingCustomFolder
+                             ? (syncFolderPath as NSString).abbreviatingWithTildeInPath
+                             : "No custom folder chosen")
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .foregroundStyle(usingCustomFolder ? .primary : .secondary)
+                        Spacer()
+                        Button("Choose Folder…") { chooseSyncFolder() }
+                    }
+                    Text("Pick the same folder on every Mac — any folder that Dropbox, "
+                         + "Google Drive or similar mirrors between machines.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section("Permissions") {
@@ -118,6 +131,39 @@ struct SettingsView: View {
         .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
             accessibilityGranted = Paster.canAutoPaste
         }
+    }
+
+    // MARK: - Sync helpers
+
+    /// iCloud Drive's on-disk home. The same path exists on every Mac signed
+    /// into iCloud, which is what makes zero-setup sync possible.
+    private static let iCloudDrivePath =
+        NSHomeDirectory() + "/Library/Mobile Documents/com~apple~CloudDocs"
+
+    private static var iCloudDriveExists: Bool {
+        FileManager.default.fileExists(atPath: iCloudDrivePath)
+    }
+
+    private var iCloudSyncFolder: String { Self.iCloudDrivePath + "/ClipboardHistory" }
+
+    private var usingCustomFolder: Bool {
+        !syncFolderPath.isEmpty && syncFolderPath != iCloudSyncFolder
+    }
+
+    /// "On" means: sync enabled AND pointed at the well-known iCloud location.
+    private var iCloudSyncBinding: Binding<Bool> {
+        Binding(
+            get: { syncEnabled && syncFolderPath == iCloudSyncFolder },
+            set: { on in
+                if on {
+                    try? FileManager.default.createDirectory(
+                        atPath: iCloudSyncFolder, withIntermediateDirectories: true)
+                    syncFolderPath = iCloudSyncFolder
+                    syncEnabled = true
+                } else {
+                    syncEnabled = false
+                }
+            })
     }
 
     private func chooseSyncFolder() {
