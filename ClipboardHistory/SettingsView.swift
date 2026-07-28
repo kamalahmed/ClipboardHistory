@@ -10,6 +10,7 @@ struct SettingsView: View {
     /// normal value, and writing to it both saves to disk and redraws the view.
     @AppStorage("maxItems") private var maxItems = 200
     @AppStorage("autoPaste") private var autoPaste = true
+    @AppStorage("pastePlainText") private var pastePlainText = true
 
     @AppStorage("syncEnabled") private var syncEnabled = false
     @AppStorage("syncFolderPath") private var syncFolderPath = ""
@@ -43,6 +44,12 @@ struct SettingsView: View {
 
             Section("Behaviour") {
                 Toggle("Paste automatically after picking an item", isOn: $autoPaste)
+
+                Toggle("Always paste as plain text", isOn: $pastePlainText)
+                Text("Off: pasting restores the original formatting (fonts, "
+                     + "colors, links) when the copy had any.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
                 Toggle("Launch at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, wantsLaunch in

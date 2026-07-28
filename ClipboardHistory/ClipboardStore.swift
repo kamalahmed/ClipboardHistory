@@ -46,13 +46,14 @@ final class ClipboardStore: ObservableObject {
 
     // MARK: - Adding
 
-    func addText(_ text: String, source: NSRunningApplication?) {
+    func addText(_ text: String, rtf: Data? = nil, source: NSRunningApplication?) {
         // Very long clippings get truncated so the JSON file stays sane.
         let capped = text.count > 200_000 ? String(text.prefix(200_000)) : text
 
         let item = ClipItem(id: UUID(),
                             kind: .text,
                             text: capped,
+                            rtfData: rtf,
                             imageFileName: nil,
                             createdAt: Date(),
                             pinned: false,
@@ -91,6 +92,8 @@ final class ClipboardStore: ObservableObject {
             // Already seen this exact content: bump it to the top instead of duplicating.
             var existing = items.remove(at: index)
             existing.createdAt = Date()
+            // Same plain text, but this copy may have brought formatting along.
+            if existing.rtfData == nil { existing.rtfData = item.rtfData }
             items.insert(existing, at: 0)
 
             // We may have just written a PNG we no longer need.

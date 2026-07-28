@@ -18,6 +18,11 @@ struct ClipItem: Identifiable, Codable, Equatable {
     /// Set when `kind == .text`.
     var text: String?
 
+    /// The original rich-text bytes (RTF), kept alongside the plain text when
+    /// the copy had formatting. Only used when the "keep formatting" setting
+    /// is on; capped at capture time so the history file stays small.
+    var rtfData: Data?
+
     /// Set when `kind == .image`. The image bytes live in a separate PNG file
     /// (JSON is a terrible place for megabytes of image data), and this is just
     /// the file name inside the app's `images` folder.

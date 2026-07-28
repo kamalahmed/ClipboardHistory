@@ -15,6 +15,12 @@ enum Paster {
 
         switch item.kind {
         case .text:
+            // Plain text by default; the original formatting only when the
+            // user turned "Always paste as plain text" off and we captured it.
+            let plainOnly = UserDefaults.standard.object(forKey: "pastePlainText") as? Bool ?? true
+            if !plainOnly, let rtf = item.rtfData {
+                pasteboard.setData(rtf, forType: .rtf)
+            }
             pasteboard.setString(item.text ?? "", forType: .string)
         case .image:
             if let image = store.image(for: item), let tiff = image.tiffRepresentation {

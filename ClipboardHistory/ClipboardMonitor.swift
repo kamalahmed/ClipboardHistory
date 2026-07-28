@@ -54,7 +54,12 @@ final class ClipboardMonitor {
 
         if let text = pasteboard.string(forType: .string),
            !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            store.addText(text, source: source)
+            // Grab the rich-text flavour too (if any), so "keep formatting"
+            // pastes can restore it. Oversized RTF is dropped, not truncated —
+            // truncated RTF wouldn't parse.
+            var rtf = pasteboard.data(forType: .rtf)
+            if let data = rtf, data.count > 262_144 { rtf = nil }
+            store.addText(text, rtf: rtf, source: source)
             return
         }
 
