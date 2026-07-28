@@ -1,0 +1,39 @@
+# Builds the app and attaches a downloadable ClipboardHistory.dmg to the
+# GitHub release whenever a version tag (v1.0, v1.1…) is pushed:
+#
+#   git tag v1.0 && git push origin v1.0
+#
+# The app is ad-hoc signed, so no certificates or secrets are needed.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          xcodebuild -scheme ClipboardHistory -configuration Release \
+            -derivedDataPath build build
+
+      - name: Package DMG
+        run: |
+          mkdir stage
+          cp -R build/Build/Products/Release/ClipboardHistory.app stage/
+          ln -s /Applications stage/Applications
+          hdiutil create -volname "ClipboardHistory" -srcfolder stage \
+            -format UDZO ClipboardHistory.dmg
+
+      - name: Attach to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ClipboardHistory.dmg
+          generate_release_notes: true
