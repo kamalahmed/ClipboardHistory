@@ -67,7 +67,10 @@ final class PanelController: NSObject, NSWindowDelegate {
         )
         panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true
-        panel.isMovableByWindowBackground = true
+        // Move the window by its title bar only. When the whole background is
+        // draggable, every in-content drag (like reordering pinned items)
+        // drags the window instead.
+        panel.isMovableByWindowBackground = false
         panel.level = .floating
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false

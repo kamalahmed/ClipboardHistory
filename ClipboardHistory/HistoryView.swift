@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// The contents of the popup: a search field on top, a scrolling list below.
 struct HistoryView: View {
@@ -17,6 +18,9 @@ struct HistoryView: View {
 
     /// ⌘-clicked items, for pasting several at once.
     @State private var multiSelectedIDs: Set<UUID> = []
+
+    /// The pinned item currently being dragged to a new position.
+    @State private var reorderingID: UUID?
 
     // Date filtering: either set from the calendar popover, or inferred from
     // phrases in the query ("7 days ago", "last week") by DateQueryParser.
@@ -48,6 +52,11 @@ struct HistoryView: View {
             }
             .sorted { a, b in
                 if a.pinned != b.pinned { return a.pinned }
+                if a.pinned {
+                    // Pinned section: manual drag order first, newest after.
+                    let ao = a.pinnedOrder ?? Int.max, bo = b.pinnedOrder ?? Int.max
+                    if ao != bo { return ao < bo }
+                }
                 return a.createdAt > b.createdAt
             }
     }
@@ -171,7 +180,8 @@ struct HistoryView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Show items from…").font(.headline)
 
-            HStack {
+            // A dropdown, not a button row — four buttons don't fit the popover.
+            Menu {
                 ForEach(["Today", "Yesterday", "Last 7 days", "Last 30 days"], id: \.self) { preset in
                     Button(preset) {
                         let parsed = DateQueryParser.parse(preset.lowercased())
@@ -180,6 +190,8 @@ struct HistoryView: View {
                         showDateFilter = false
                     }
                 }
+            } label: {
+                Label("Quick ranges", systemImage: "clock.arrow.circlepath")
             }
 
             Divider()
@@ -236,9 +248,26 @@ struct HistoryView: View {
                                     onPick(item)
                                 }
                             }
+                            // Pinned items can be dragged into a new order.
+                            .onDrag {
+                                guard item.pinned else { return NSItemProvider() }
+                                reorderingID = item.id
+                                return NSItemProvider(object: item.id.uuidString as NSString)
+                            }
+                            .onDrop(of: [UTType.plainText],
+                                    delegate: PinnedReorderDelegate(target: item,
+                                                                    reorderingID: $reorderingID,
+                                                                    store: store))
                             .contextMenu {
                                 Button(item.pinned ? "Unpin" : "Pin") {
                                     store.togglePin(item)
+                                }
+                                if let ocr = item.ocrText, !ocr.isEmpty {
+                                    Button("Copy Text from Image") {
+                                        let pasteboard = NSPasteboard.general
+                                        pasteboard.clearContents()
+                                        pasteboard.setString(ocr, forType: .string)
+                                    }
                                 }
                                 if item.kind == .text {
                                     ShareLink(item: item.text ?? "") {
@@ -319,6 +348,29 @@ struct HistoryView: View {
     }
 }
 
+/// Handles dropping a dragged pinned item onto another row. The reorder
+/// happens live as the drag passes over each pinned row (the standard SwiftUI
+/// reorder pattern — `dropEntered` moves, `performDrop` just ends the drag).
+private struct PinnedReorderDelegate: DropDelegate {
+    let target: ClipItem
+    @Binding var reorderingID: UUID?
+    let store: ClipboardStore
+
+    func dropEntered(info: DropInfo) {
+        guard let dragged = reorderingID, dragged != target.id, target.pinned else { return }
+        store.movePinned(dragged, before: target.id)
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: reorderingID == nil ? .forbidden : .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        reorderingID = nil
+        return true
+    }
+}
+
 /// One row in the list. Kept `private` because nothing else needs it.
 private struct ClipRow: View {
 
@@ -360,22 +412,6 @@ private struct ClipRow: View {
             }
 
             Spacer(minLength: 0)
-
-            // A dedicated drag handle: a plain .onDrag on the whole row loses
-            // to the tap gesture (the click pastes before a drag can start),
-            // so dragging gets its own grip with no tap attached.
-            if hovering {
-                Image(systemName: "line.3.horizontal")
-                    .foregroundStyle(.tertiary)
-                    .onDrag {
-                        if item.kind == .image, let url = store.imageURL(for: item),
-                           let provider = NSItemProvider(contentsOf: url) {
-                            return provider
-                        }
-                        return NSItemProvider(object: (item.text ?? "") as NSString)
-                    }
-                    .help("Drag into another app")
-            }
 
             if item.pinned || hovering {
                 Button { store.togglePin(item) } label: {
