@@ -1,0 +1,17 @@
+# macOS
+.DS_Store
+
+# Xcode
+DerivedData/
+xcuserdata/
+*.xccheckout
+*.moved-aside
+
+# Build output
+build/
+dist/
+
+# Local notes / tooling
+CLAUDE.md
+CLAUDE-CODE-SETUP.md
+.claude/
