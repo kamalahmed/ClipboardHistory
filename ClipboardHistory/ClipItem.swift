@@ -94,6 +94,13 @@ struct ClipItem: Identifiable, Codable, Equatable {
         return t.hasPrefix("http://") || t.hasPrefix("https://")
     }
 
+    /// True if the text contains an email address — used by the Emails filter.
+    var containsEmail: Bool {
+        guard kind == .text, let text, text.count < 5000 else { return false }
+        return text.range(of: #"[\w.+-]+@[\w-]+\.[A-Za-z]{2,}"#,
+                          options: .regularExpression) != nil
+    }
+
     var iconName: String {
         if isSensitive == true { return "key.fill" }
         switch kind {

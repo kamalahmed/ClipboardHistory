@@ -1,6 +1,30 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// The quick content filters shown as chips under the search field, so an
+/// email or link copied long ago is two clicks away instead of a scroll hunt.
+enum ContentFilter: String, CaseIterable, Identifiable {
+    case all = "All"
+    case links = "Links"
+    case emails = "Emails"
+    case images = "Images"
+    case pinnedOnly = "Pinned"
+    case secrets = "Passwords"
+
+    var id: String { rawValue }
+
+    func matches(_ item: ClipItem) -> Bool {
+        switch self {
+        case .all:        return true
+        case .links:      return item.looksLikeURL
+        case .emails:     return item.containsEmail
+        case .images:     return item.kind == .image
+        case .pinnedOnly: return item.pinned
+        case .secrets:    return item.isSensitive == true
+        }
+    }
+}
+
 /// The contents of the popup: a search field on top, a scrolling list below.
 struct HistoryView: View {
 
@@ -21,6 +45,9 @@ struct HistoryView: View {
 
     /// The pinned item currently being dragged to a new position.
     @State private var reorderingID: UUID?
+
+    /// Active content-type chip (links, emails, images…).
+    @State private var contentFilter: ContentFilter = .all
 
     // Date filtering: either set from the calendar popover, or inferred from
     // phrases in the query ("7 days ago", "last week") by DateQueryParser.
@@ -46,7 +73,8 @@ struct HistoryView: View {
         let text = parsedQuery.text
         return store.items
             .filter { item in
-                (text.isEmpty || item.searchText.localizedCaseInsensitiveContains(text))
+                contentFilter.matches(item)
+                && (text.isEmpty || item.searchText.localizedCaseInsensitiveContains(text))
                 && activeFrom.map { item.createdAt >= $0 } ?? true
                 && activeTo.map { item.createdAt < $0 } ?? true
             }
@@ -64,6 +92,7 @@ struct HistoryView: View {
     var body: some View {
         VStack(spacing: 0) {
             searchField
+            filterChips
             if dateFilterActive { dateFilterChip }
             Divider()
             if results.isEmpty {
@@ -137,6 +166,31 @@ struct HistoryView: View {
                 selectedID = results.first?.id
             }
         }
+    }
+
+    /// One tap filters to a content type; tapping the active chip goes back
+    /// to All.
+    private var filterChips: some View {
+        HStack(spacing: 6) {
+            ForEach(ContentFilter.allCases) { candidate in
+                let isActive = contentFilter == candidate
+                Button {
+                    contentFilter = isActive ? .all : candidate
+                } label: {
+                    Text(candidate.rawValue)
+                        .font(.system(size: 11, weight: isActive ? .semibold : .regular))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(isActive
+                            ? Color.accentColor.opacity(0.3)
+                            : Color.primary.opacity(0.07)))
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.bottom, 8)
     }
 
     /// Shows which date range is active, with a ✕ to clear it. Ranges typed
