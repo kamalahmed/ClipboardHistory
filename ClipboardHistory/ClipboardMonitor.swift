@@ -63,6 +63,17 @@ final class ClipboardMonitor {
 
         let source = NSWorkspace.shared.frontmostApplication
 
+        // An image FILE copied in Finder puts its filename on the pasteboard
+        // as text — record the actual image instead, so OCR and previews work.
+        let imageExtensions: Set = ["png", "jpg", "jpeg", "heic", "tiff", "gif", "bmp", "webp"]
+        if let urls = pasteboard.readObjects(forClasses: [NSURL.self]) as? [URL],
+           let fileURL = urls.first, fileURL.isFileURL,
+           imageExtensions.contains(fileURL.pathExtension.lowercased()),
+           let image = NSImage(contentsOf: fileURL) {
+            store.addImage(image, source: source)
+            return
+        }
+
         if let text = pasteboard.string(forType: .string),
            !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             // Grab the rich-text flavour too (if any), so "keep formatting"

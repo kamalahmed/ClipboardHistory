@@ -42,6 +42,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         syncManager = SyncManager(store: store)
         syncManager.start()
 
+        // Recognise text in images recorded before OCR existed.
+        store.backfillOCR()
+
         // Expire password-like items on a slow tick (and once at launch, so
         // secrets don't outlive a quit-and-relaunch).
         store.purgeExpiredSecrets()

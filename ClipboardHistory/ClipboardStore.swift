@@ -141,6 +141,16 @@ final class ClipboardStore: ObservableObject {
         recognizeText(in: png, itemID: item.id)
     }
 
+    /// Recognise text in any image that doesn't have it yet — items captured
+    /// by versions of the app from before OCR existed. Called at launch.
+    func backfillOCR() {
+        for item in items where item.kind == .image && (item.ocrText ?? "").isEmpty {
+            guard let url = imageURL(for: item),
+                  let data = try? Data(contentsOf: url) else { continue }
+            recognizeText(in: data, itemID: item.id)
+        }
+    }
+
     /// On-device OCR (Vision) so screenshots become searchable. Runs off the
     /// main thread; the result is attached to the item whenever it's ready.
     private func recognizeText(in pngData: Data, itemID: UUID) {
@@ -178,6 +188,10 @@ final class ClipboardStore: ObservableObject {
             // We may have just written a PNG we no longer need.
             if let newFile = item.imageFileName, newFile != existing.imageFileName {
                 deleteImageFile(newFile)
+            }
+            // Re-copying an image that predates OCR: recognise it now.
+            if existing.kind == .image, (existing.ocrText ?? "").isEmpty {
+                backfillOCR()
             }
         } else {
             items.insert(item, at: 0)
