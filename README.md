@@ -10,6 +10,7 @@ history, click what you need, and it's pasted.
 - **Remembers everything you copy** — text, links, and images
 - **Search as you type** — start typing and matches appear instantly
 - **Search by date** — type "7 days ago" or "last week", or pick dates from the calendar
+- **One-tap filters** — narrow the list to Links, Emails, Images, Pinned, or Passwords
 - **Paste several at once** — ⌘-click a few items, press Return, they paste together
 - **Reads text in your screenshots** — images are OCR'd on your Mac, so they're searchable and their text is copyable
 - **Clean text by default** — formatting is stripped when you paste; flip one setting to keep it instead
@@ -39,6 +40,7 @@ can see where it lives.
 | Paste an item | Click it, or ↑↓ then Return |
 | Paste several items | ⌘-click each one, then Return |
 | Find last week's copy | Type "7 days ago" or "last week", or click the 📅 button |
+| Find that email / link again | Tap the **Emails** or **Links** chip under the search box |
 | Keep original formatting | ⚙ Settings → turn off *Always paste as plain text* |
 | Pin / delete | Hover over the item |
 | Reorder pinned items | Drag one over another |
