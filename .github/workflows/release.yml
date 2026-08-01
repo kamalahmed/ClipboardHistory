@@ -1,14 +1,12 @@
-# Builds the app and attaches a downloadable ClipboardHistory.dmg to the
-# GitHub release whenever a version tag (v1.0, v1.1…) is pushed:
-#
-#   git tag v1.0 && git push origin v1.0
-#
-# The app is ad-hoc signed, so no certificates or secrets are needed.
+# Fallback CI build — produces an UNSIGNED, UNNOTARIZED dmg, so it is
+# manual-trigger only. Real releases are built locally with
+# scripts/release.sh (Developer ID + notarization need the certificate
+# and notary credentials, which live only in the developer's keychain)
+# and uploaded to the GitHub release by hand.
 name: Release
 
 on:
-  push:
-    tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: write
